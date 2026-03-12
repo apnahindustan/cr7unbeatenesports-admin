@@ -2,46 +2,66 @@
 <!DOCTYPE html>
 <html>
 <head>
-<title>CR7 UNBEATEN ESPORTS</title>
+<title>CR7 ESPORTS ADMIN PANEL</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <style>
-body{margin:0;background:#0e0e0e;color:white;font-family:Arial;}
-.header{display:flex;align-items:center;gap:10px;background:#000;padding:10px;border-bottom:2px solid #ffb84d;}
-.logo{height:40px;}
-.site{font-size:18px;font-weight:bold;}
-.bannerSlider{display:flex;justify-content:center;gap:15px;padding:10px;overflow-x:auto;scroll-behavior:smooth;}
-.bannerSlider img{height:140px;border-radius:6px;}
-.menu{display:flex;justify-content:center;gap:10px;flex-wrap:wrap;margin:10px;}
-.menu button{padding:8px 14px;border:none;background:#ffb84d;cursor:pointer;font-weight:bold;}
-.resultBox{max-width:1000px;margin:auto;padding:20px;background-size:cover;background-position:center;border-radius:10px;}
-.resultHeader{display:flex;align-items:center;justify-content:space-between;margin-bottom:15px;}
-.resultHeader img{height:60px;}
-.title{font-size:28px;font-weight:bold;}
-table{width:100%;border-collapse:separate;border-spacing:0 8px;}
-th{background:#000;color:#fff;padding:10px;}
-td{padding:10px;text-align:center;}
-.rank{background:#ffd400;color:#000;font-weight:bold;}
-.team{background:#0a0a2a;text-align:left;font-weight:bold;}
-.stat{background:#ffd400;color:#000;font-weight:bold;}
-.card{background:#1c1c1c;padding:10px;margin:10px;border-radius:6px;}
+body{background:#0f0f0f;color:white;font-family:Arial;margin:0;padding:20px}
+h2{color:#ffb84d}
+input{padding:8px;margin:5px;background:#1a1a1a;color:white;border:1px solid #333}
+button{padding:8px 14px;background:#ffb84d;border:none;cursor:pointer;font-weight:bold;margin-top:5px}
+.card{background:#1c1c1c;padding:12px;margin:10px 0;border-radius:8px}
+img{max-width:150px;margin-top:5px}
 </style>
 </head>
 <body>
 
-<div class="header">
-<img src="logo.png" class="logo">
-<div class="site">CR7 UNBEATEN ESPORTS</div>
+<h2>🏆 Tournament Setup + Design</h2>
+<div class="card">
+<input id="title" placeholder="Tournament Title">
+<input id="matchDate" type="date">
+<input id="matchTime" type="time">
+<input id="totalMatches" type="number" placeholder="Total Matches">
+<label>Logo Upload</label>
+<input type="file" id="logoFile">
+<label>Background Upload</label>
+<input type="file" id="bgFile">
+<button onclick="startTournament()">Start Tournament</button>
 </div>
 
-<div class="bannerSlider" id="bannerSlider"></div>
-
-<div class="menu">
-<button onclick="showSchedule()">Match Schedule</button>
-<button onclick="showLive()">Live Result</button>
-<button onclick="showHistory()">Previous Result</button>
+<h2>👥 Add Teams</h2>
+<div class="card">
+<input id="teamname" placeholder="Team Name">
+<button onclick="addTeam()">Add Team</button>
 </div>
+<div id="teamList"></div>
 
-<div id="content"></div>
+<h2>🎮 Match Result Entry</h2>
+<select id="matchSelect" onchange="loadMatch()"></select>
+<div id="teams"></div>
+
+<h2>📢 Banner Manager</h2>
+<div class="card">
+<input type="file" id="bannerFile">
+<input id="bannerLink" placeholder="Banner Link">
+<button onclick="addBanner()">Add Banner</button>
+</div>
+<div id="bannerList"></div>
+
+<h2>📅 Match Schedule</h2>
+<div class="card">
+<input id="matchName" placeholder="Match Name">
+<input id="map" placeholder="Map">
+<input id="group" placeholder="Group">
+<input id="sdate" type="date">
+<input id="stime" type="time">
+<button onclick="saveSchedule()">Add Schedule</button>
+</div>
+<div id="scheduleList"></div>
+
+<h2>📜 Tournament History</h2>
+<div id="historyList"></div>
+
+<button onclick="endTournament()" style="background:#ff4444">End Tournament</button>
 
 <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-database-compat.js"></script>
@@ -59,132 +79,182 @@ appId:"1:727943688192:web:077ba0b416957122b968e5"
 
 firebase.initializeApp(firebaseConfig);
 const db=firebase.database();
-const content=document.getElementById("content");
 
-let bannerInterval;
+const posPts={1:12,2:9,3:8,4:7,5:6,6:5,7:4,8:3,9:2,10:1};
+const teamsDiv=document.getElementById("teams");
+const matchSelect=document.getElementById("matchSelect");
 
+function uploadImage(file){
+return new Promise(resolve=>{
+const reader=new FileReader();
+reader.onload=e=>resolve(e.target.result);
+reader.readAsDataURL(file);
+});
+}
+
+async function startTournament(){
+const logo=await uploadImage(logoFile.files[0]);
+const bg=await uploadImage(bgFile.files[0]);
+db.ref("design").set({title:title.value,logo:logo,bg:bg});
+db.ref("teams").once("value",snap=>{
+const teamsSnapshot=snap.val()||{};
+db.ref("tournament/live").set({
+date:matchDate.value,
+time:matchTime.value,
+totalMatches:Number(totalMatches.value||1),
+teamsSnapshot:teamsSnapshot
+});
+alert("Tournament Started");
+loadMatches();
+});
+}
+
+function loadMatches(){
+db.ref("tournament/live").once("value",snap=>{
+if(!snap.exists())return;
+const live=snap.val();
+matchSelect.innerHTML="";
+for(let i=1;i<=live.totalMatches;i++){
+matchSelect.innerHTML+=`<option value="match${i}">Match ${i}</option>`;
+}
+});
+}
+
+function addTeam(){
+const name=teamname.value.trim();
+if(!name)return;
+const ref=db.ref("teams").push({name:name});
+db.ref("tournament/live/teamsSnapshot").once("value",snap=>{
+db.ref("tournament/live/teamsSnapshot/"+ref.key).set({name:name});
+});
+teamname.value="";
+}
+
+function loadTeams(){
+db.ref("teams").on("value",snap=>{
+let html="";
+snap.forEach(t=>{
+html+=`<div class="card">${t.val().name} <button onclick="deleteTeam('${t.key}')">Delete</button></div>`;
+});
+teamList.innerHTML=html;
+});
+}
+
+function deleteTeam(id){
+db.ref("teams/"+id).remove();
+}
+
+function loadMatch(){
+const match=matchSelect.value;
+db.ref("teams").once("value",ts=>{
+db.ref(`tournament/live/matches/${match}`).once("value",ms=>{
+let html="";
+ts.forEach(t=>{
+const data=ms.val()?.[t.key]||{};
+html+=`
+<div class="card">
+${t.val().name}<br>
+Kills <input type="number" value="${data.kills||0}" onchange="update('${match}','${t.key}',this.value,null)">
+Position <input type="number" value="${data.position||0}" onchange="update('${match}','${t.key}',null,this.value)">
+<button onclick="deleteResult('${match}','${t.key}')">Delete</button>
+</div>`;
+});
+teamsDiv.innerHTML=html;
+});
+});
+}
+
+function update(match,id,k,p){
+db.ref(`tournament/live/matches/${match}/${id}`).once("value",s=>{
+let d=s.val()||{kills:0,position:0};
+if(k!==null)d.kills=Number(k);
+if(p!==null)d.position=Number(p);
+d.total=d.kills+(posPts[d.position]||0);
+db.ref(`tournament/live/matches/${match}/${id}`).set(d);
+});
+}
+
+function deleteResult(match,id){
+db.ref(`tournament/live/matches/${match}/${id}`).remove();
+loadMatch();
+}
+
+async function addBanner(){
+const img=await uploadImage(bannerFile.files[0]);
+const id=db.ref("banners").push().key;
+db.ref("banners/"+id).set({image:img,link:bannerLink.value});
+}
+
+function loadBanners(){
 db.ref("banners").on("value",snap=>{
 let html="";
 snap.forEach(b=>{
 const d=b.val();
-html+=`<a href="${d.link}" target="_blank"><img src="${d.image}"></a>`;
+html+=`<div class="card"><img src="${d.image}"><br>${d.link} <button onclick="deleteBanner('${b.key}')">Delete</button></div>`;
 });
-bannerSlider.innerHTML=html;
-clearInterval(bannerInterval);
-bannerInterval=setInterval(()=>{bannerSlider.scrollLeft+=1;},30);
+bannerList.innerHTML=html;
 });
+}
 
-function showSchedule(){
-content.innerHTML="<h3 style='text-align:center'>Match Schedule</h3>";
-db.ref("schedule").once("value",snap=>{
-if(!snap.exists()){content.innerHTML+="<h3>No Result Found</h3>";return;}
+function deleteBanner(id){
+db.ref("banners/"+id).remove();
+}
+
+function saveSchedule(){
+db.ref("schedule/"+matchName.value).set({
+map:map.value,
+group:group.value,
+date:sdate.value,
+time:stime.value
+});
+}
+
+function loadSchedules(){
+db.ref("schedule").on("value",snap=>{
+let html="";
 snap.forEach(s=>{
 const d=s.val();
-content.innerHTML+=`<div class="card"><b>${s.key}</b><br>Map : ${d.map}<br>Group : ${d.group}<br>Date : ${d.date}<br>Time : ${d.time}</div>`;
+html+=`<div class="card"><b>${s.key}</b> ${d.map} | ${d.group} ${d.date} ${d.time} <button onclick="deleteSchedule('${s.key}')">Delete</button></div>`;
 });
+scheduleList.innerHTML=html;
 });
 }
 
-function showLive(){
-content.innerHTML="<h3>Live Result</h3>";
+function deleteSchedule(id){
+db.ref("schedule/"+id).remove();
+}
+
+function endTournament(){
 db.ref("tournament/live").once("value",snap=>{
-if(!snap.exists()){content.innerHTML="<h3>No Result Found</h3>";return;}
 const live=snap.val();
-db.ref("design").once("value",designSnap=>{
-const design=designSnap.val()||{};
-content.innerHTML+=`<h3>${design.title||"Tournament"}</h3>`;
-for(let i=1;i<=live.totalMatches;i++){
-content.innerHTML+=`<button onclick="loadLiveMatch('match${i}')" style="margin:5px;padding:8px 14px;background:#ffb84d;border:none;cursor:pointer;font-weight:bold;">MATCH ${i}</button>`;
-}
-});
+if(!live)return;
+const name="Tournament_"+Date.now();
+db.ref("tournament/history/"+name).set(live);
+db.ref("tournament/live").remove();
+alert("Tournament moved to history");
 });
 }
 
-function loadLiveMatch(match){
-const num=match.replace("match","");
-content.innerHTML=`<h3 style="text-align:center">MATCH ${num}</h3>`;
-Promise.all([
-db.ref("teams").once("value"),
-db.ref(`tournament/live/matches/${match}`).once("value"),
-db.ref("design").once("value")
-]).then(([ts,ms,ds])=>{
-buildTable(ts,ms,ds);
-});
-}
-
-function showHistory(){
-content.innerHTML="<h3>Previous Tournament</h3>";
-db.ref("tournament/history").once("value",snap=>{
-if(!snap.exists()){content.innerHTML="<h3>No Result Found</h3>";return;}
+function loadHistory(){
+db.ref("tournament/history").on("value",snap=>{
+let html="";
 snap.forEach(t=>{
-content.innerHTML+=`<div class="card"><b>${t.key}</b> <button onclick="viewHistory('${t.key}')">View</button></div>`;
+html+=`<div class="card"><b>${t.key}</b><br><button onclick="deleteHistory('${t.key}')">Delete</button></div>`;
 });
-});
-}
-
-function viewHistory(name){
-content.innerHTML=`<h3>${name}</h3>`;
-db.ref(`tournament/history/${name}/matches`).once("value",snap=>{
-if(!snap.exists()){content.innerHTML+="<h3>No Result Found</h3>";return;}
-snap.forEach(m=>{
-content.innerHTML+=`<button onclick="loadHistoryMatch('${name}','${m.key}')" style="margin:5px;padding:8px 14px;background:#ffb84d;border:none;cursor:pointer;font-weight:bold;">${m.key}</button>`;
-});
+historyList.innerHTML=html;
 });
 }
 
-function loadHistoryMatch(name,match){
-const num=match.replace("match","");
-content.innerHTML=`<h3 style="text-align:center">MATCH ${num}</h3>`;
-Promise.all([
-db.ref("teams").once("value"),
-db.ref(`tournament/history/${name}/matches/${match}`).once("value"),
-db.ref("design").once("value")
-]).then(([ts,ms,ds])=>{
-buildTable(ts,ms,ds);
-});
+function deleteHistory(id){
+if(!confirm("Delete this tournament?"))return;
+db.ref("tournament/history/"+id).remove();
 }
 
-function buildTable(ts,ms,ds){
-const teams=ts.val()||{};
-const matchData=ms.val()||{};
-const design=ds.val()||{};
-
-let teamsArray=[];
-Object.keys(teams).forEach(id=>{
-const t=matchData[id]||{kills:0,position:0,total:0};
-teamsArray.push({name:teams[id].name,kills:t.kills,place:t.position,total:t.total});
-});
-
-const hasResult=teamsArray.some(t=>t.kills>0||t.place>0||t.total>0);
-if(!hasResult){content.innerHTML+="<h3>No Result Found</h3>";return;}
-
-teamsArray.sort((a,b)=>b.total-a.total);
-
-let html=`<div class="resultBox" style="background-image:url('${design.bg||""}')">
-<div class="resultHeader">
-<img src="${design.logo||""}">
-<div class="title">${design.title||"RESULT"}</div>
-</div>
-<table>
-<tr><th>RANK</th><th>TEAM NAME</th><th>KILLS</th><th>PLACE</th><th>TOTAL</th></tr>`;
-
-let rank=1;
-teamsArray.forEach(t=>{
-html+=`<tr>
-<td class="rank">${rank}</td>
-<td class="team">${t.name}</td>
-<td class="stat">${t.kills}</td>
-<td class="stat">${t.place}</td>
-<td class="stat">${t.total}</td>
-</tr>`;
-rank++;
-});
-
-html+="</table></div>";
-content.innerHTML+=html;
-}
-
-showLive();
+loadTeams();
+loadBanners();
+loadSchedules();
+loadMatches();
+loadHistory();
 
 </script>
 </body>
