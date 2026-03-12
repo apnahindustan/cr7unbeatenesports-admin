@@ -1,0 +1,524 @@
+<!DOCTYPE html>
+<html>
+<head>
+
+<title>CR7 ESPORTS ADMIN PANEL</title>
+
+<meta name="viewport" content="width=device-width,initial-scale=1">
+
+<style>
+
+body{
+background:#0f0f0f;
+color:white;
+font-family:Arial;
+margin:0;
+padding:20px;
+}
+
+h2{color:#ffb84d;}
+
+input{
+padding:8px;
+margin:5px;
+background:#1a1a1a;
+color:white;
+border:1px solid #333;
+}
+
+button{
+padding:8px 14px;
+background:#ffb84d;
+border:none;
+cursor:pointer;
+font-weight:bold;
+margin-top:5px;
+}
+
+.card{
+background:#1c1c1c;
+padding:12px;
+margin:10px 0;
+border-radius:8px;
+}
+
+img{max-width:150px;margin-top:5px;}
+
+</style>
+</head>
+
+<body>
+
+<h2>🏆 Tournament Setup + Design</h2>
+
+<div class="card">
+
+<input id="title" placeholder="Tournament Title">
+
+<input id="matchDate" type="date">
+<input id="matchTime" type="time">
+
+<input id="totalMatches" type="number" placeholder="Total Matches">
+
+<label>Logo Upload</label>
+<input type="file" id="logoFile">
+
+<label>Background Upload</label>
+<input type="file" id="bgFile">
+
+<button onclick="startTournament()">Start Tournament</button>
+
+</div>
+
+
+<h2>👥 Add Teams</h2>
+
+<div class="card">
+
+<input id="teamname" placeholder="Team Name">
+<button onclick="addTeam()">Add Team</button>
+
+</div>
+
+<div id="teamList"></div>
+
+
+<h2>🎮 Match Result Entry</h2>
+
+<select id="matchSelect" onchange="loadMatch()"></select>
+
+<div id="teams"></div>
+
+
+<h2>📢 Banner Manager</h2>
+
+<div class="card">
+
+<input type="file" id="bannerFile">
+<input id="bannerLink" placeholder="Banner Link">
+
+<button onclick="addBanner()">Add Banner</button>
+
+</div>
+
+<div id="bannerList"></div>
+
+
+<h2>📅 Match Schedule</h2>
+
+<div class="card">
+
+<input id="matchName" placeholder="Match Name">
+<input id="map" placeholder="Map">
+<input id="group" placeholder="Group">
+<input id="sdate" type="date">
+<input id="stime" type="time">
+
+<button onclick="saveSchedule()">Add Schedule</button>
+
+</div>
+
+<div id="scheduleList"></div>
+
+
+<h2>📜 Tournament History</h2>
+
+<div id="historyList"></div>
+
+
+<button onclick="endTournament()" style="background:#ff4444">
+End Tournament
+</button>
+
+
+
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-database-compat.js"></script>
+
+<script>
+
+const firebaseConfig={
+ apiKey:"AIzaSyAM_vLckdeuYKPHouscSPA_CxE8WlZQbuw",
+ authDomain:"scoreboard-c69c6.firebaseapp.com",
+ databaseURL:"https://scoreboard-c69c6-default-rtdb.firebaseio.com",
+ projectId:"scoreboard-c69c6",
+ storageBucket:"scoreboard-c69c6.firebasestorage.app",
+ messagingSenderId:"727943688192",
+ appId:"1:727943688192:web:077ba0b416957122b968e5"
+};
+
+firebase.initializeApp(firebaseConfig);
+const db=firebase.database();
+
+const posPts={1:12,2:9,3:8,4:7,5:6,6:5,7:4,8:3,9:2,10:1};
+
+const teamsDiv=document.getElementById("teams");
+const matchSelect=document.getElementById("matchSelect");
+
+
+
+function uploadImage(file){
+return new Promise(resolve=>{
+const reader=new FileReader();
+reader.onload=e=>resolve(e.target.result);
+reader.readAsDataURL(file);
+});
+}
+
+
+
+async function startTournament(){
+
+const logo=await uploadImage(logoFile.files[0]);
+const bg=await uploadImage(bgFile.files[0]);
+
+db.ref("design").set({
+title:title.value,
+logo:logo,
+bg:bg
+});
+
+const d=matchDate.value;
+const t=matchTime.value;
+const m=Number(totalMatches.value||1);
+
+db.ref("tournament/live").set({
+date:d,
+time:t,
+totalMatches:m
+});
+
+alert("Tournament Started");
+
+loadMatches();
+
+}
+
+
+
+function loadMatches(){
+
+db.ref("tournament/live").once("value",snap=>{
+
+if(!snap.exists()) return;
+
+const live=snap.val();
+
+matchSelect.innerHTML="";
+
+for(let i=1;i<=live.totalMatches;i++){
+matchSelect.innerHTML+=`<option value="match${i}">Match ${i}</option>`;
+}
+
+});
+
+}
+
+
+
+function addTeam(){
+
+const name=teamname.value.trim();
+if(!name) return;
+
+db.ref("tournament/teams").push({name:name});
+
+teamname.value="";
+loadTeams();
+
+}
+
+
+
+function loadTeams(){
+
+db.ref("tournament/teams").on("value",snap=>{
+
+let html="";
+
+snap.forEach(t=>{
+
+html+=`
+<div class="card">
+${t.val().name}
+<button onclick="deleteTeam('${t.key}')">Delete</button>
+</div>
+`;
+
+});
+
+teamList.innerHTML=html;
+
+});
+
+}
+
+
+
+function deleteTeam(id){
+db.ref("tournament/teams/"+id).remove();
+}
+
+
+
+function loadMatch(){
+
+const match=matchSelect.value;
+
+db.ref("tournament/teams").once("value",ts=>{
+db.ref(`tournament/live/matches/${match}`).once("value",ms=>{
+
+let html="";
+
+ts.forEach(t=>{
+
+const data=ms.val()?.[t.key] || {};
+
+html+=`
+
+<div class="card">
+
+${t.val().name}
+
+<br>
+
+Kills
+<input type="number"
+value="${data.kills||0}"
+onchange="update('${match}','${t.key}',this.value,null)">
+
+Position
+<input type="number"
+value="${data.position||0}"
+onchange="update('${match}','${t.key}',null,this.value)">
+
+<button onclick="deleteResult('${match}','${t.key}')">
+Delete
+</button>
+
+</div>
+
+`;
+
+});
+
+teamsDiv.innerHTML=html;
+
+});
+
+});
+
+}
+
+
+
+function update(match,id,k,p){
+
+db.ref(`tournament/live/matches/${match}/${id}`).once("value",s=>{
+
+let d=s.val()||{kills:0,position:0};
+
+if(k!==null)d.kills=Number(k);
+if(p!==null)d.position=Number(p);
+
+d.total=d.kills+(posPts[d.position]||0);
+
+db.ref(`tournament/live/matches/${match}/${id}`).set(d);
+
+});
+
+}
+
+
+
+function deleteResult(match,id){
+
+db.ref(`tournament/live/matches/${match}/${id}`).remove();
+loadMatch();
+
+}
+
+
+
+async function addBanner(){
+
+const img=await uploadImage(bannerFile.files[0]);
+
+const id=db.ref("banners").push().key;
+
+db.ref("banners/"+id).set({
+image:img,
+link:bannerLink.value
+});
+
+loadBanners();
+
+}
+
+
+
+function loadBanners(){
+
+db.ref("banners").on("value",snap=>{
+
+let html="";
+
+snap.forEach(b=>{
+
+const d=b.val();
+
+html+=`
+<div class="card">
+<img src="${d.image}">
+<br>
+${d.link}
+<button onclick="deleteBanner('${b.key}')">Delete</button>
+</div>
+`;
+
+});
+
+bannerList.innerHTML=html;
+
+});
+
+}
+
+
+
+function deleteBanner(id){
+db.ref("banners/"+id).remove();
+}
+
+
+
+function saveSchedule(){
+
+db.ref("schedule/"+matchName.value).set({
+map:map.value,
+group:group.value,
+date:sdate.value,
+time:stime.value
+});
+
+loadSchedules();
+
+}
+
+
+
+function loadSchedules(){
+
+db.ref("schedule").on("value",snap=>{
+
+let html="";
+
+snap.forEach(s=>{
+
+const d=s.val();
+
+html+=`
+<div class="card">
+
+<b>${s.key}</b>
+
+${d.map} | ${d.group}
+
+${d.date} ${d.time}
+
+<button onclick="deleteSchedule('${s.key}')">Delete</button>
+
+</div>
+`;
+
+});
+
+scheduleList.innerHTML=html;
+
+});
+
+}
+
+
+
+function deleteSchedule(id){
+db.ref("schedule/"+id).remove();
+}
+
+
+
+function endTournament(){
+
+db.ref("tournament/live").once("value",snap=>{
+
+const live=snap.val();
+if(!live) return;
+
+const name="Tournament_"+Date.now();
+
+db.ref("tournament/history/"+name).set(live);
+
+db.ref("tournament/live").remove();
+
+alert("Tournament moved to history");
+
+loadHistory();
+
+});
+
+}
+
+
+
+function loadHistory(){
+
+db.ref("tournament/history").on("value",snap=>{
+
+let html="";
+
+snap.forEach(t=>{
+
+html+=`
+<div class="card">
+
+<b>${t.key}</b>
+
+<br>
+
+<button onclick="deleteHistory('${t.key}')">
+Delete
+</button>
+
+</div>
+`;
+
+});
+
+historyList.innerHTML=html;
+
+});
+
+}
+
+
+
+function deleteHistory(id){
+
+if(!confirm("Delete this tournament?")) return;
+
+db.ref("tournament/history/"+id).remove();
+
+}
+
+
+
+loadTeams();
+loadBanners();
+loadSchedules();
+loadMatches();
+loadHistory();
+
+</script>
+
+</body>
+</html>
