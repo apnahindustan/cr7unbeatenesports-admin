@@ -11,6 +11,10 @@ input{padding:8px;margin:5px;background:#1a1a1a;color:white;border:1px solid #33
 button{padding:8px 14px;background:#ffb84d;border:none;cursor:pointer;font-weight:bold;margin-top:5px}
 .card{background:#1c1c1c;padding:12px;margin:10px 0;border-radius:8px}
 img{max-width:150px;margin-top:5px}
+label{display:inline-block;margin:5px 5px 2px 5px;font-size:13px;color:#aaa}
+.color-row{display:flex;align-items:center;gap:10px;margin:6px 5px}
+.color-row span{color:#fff;font-size:13px}
+input[type=color]{width:44px;height:34px;padding:2px;border:1px solid #333;background:#1a1a1a;cursor:pointer}
 </style>
 </head>
 <body>
@@ -18,9 +22,19 @@ img{max-width:150px;margin-top:5px}
 <h2>🏆 Tournament Setup + Design</h2>
 <div class="card">
 <input id="title" placeholder="Tournament Title">
+<input id="organization" placeholder="Organization Name">
 <input id="matchDate" type="date">
 <input id="matchTime" type="time">
 <input id="totalMatches" type="number" placeholder="Total Matches">
+<br>
+<div class="color-row">
+<span>Title Color:</span>
+<input type="color" id="titleColor" value="#ffffff">
+</div>
+<div class="color-row">
+<span>Organization Color:</span>
+<input type="color" id="orgColor" value="#ffb84d">
+</div>
 <label>Logo Upload</label>
 <input type="file" id="logoFile">
 <label>Background Upload</label>
@@ -95,7 +109,14 @@ reader.readAsDataURL(file);
 async function startTournament(){
 const logo=await uploadImage(logoFile.files[0]);
 const bg=await uploadImage(bgFile.files[0]);
-db.ref("design").set({title:title.value,logo:logo,bg:bg});
+db.ref("design").set({
+title:title.value,
+organization:organization.value,
+titleColor:titleColor.value,
+orgColor:orgColor.value,
+logo:logo,
+bg:bg
+});
 db.ref("teams").once("value",snap=>{
 const teamsSnapshot=snap.val()||{};
 db.ref("tournament/live").set({
